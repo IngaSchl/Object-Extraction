@@ -1,0 +1,177 @@
+Classes:
+    Boundaries
+    Labels_remaining
+    Temp
+    Public Buildings
+    Remainder
+    Texture
+    Water
+
+Process: Main:
+	Define map
+		Reset
+			delete layer: delete thematic layer 'BBs_extended'
+			delete layer: delete image layer 'Hue'
+			delete layer: delete image layer 'Saturation'
+			delete layer: delete image layer 'Value'
+			delete layer: delete image layer 'canny'
+			delete layer: delete image layer 'median'
+			delete layer: delete image layer 'hachure'
+			delete image object level: delete '<all levels>'
+		Generate HSV channels
+			color space transformation: RGB > HSV/HSI: color space: R:'Layer 1', 
+			G:'Layer 2', B:'Layer 3' -> H:'Hue', S:'Saturation', V:'Value'
+		Copy Map for further tests
+			copy map: copy map to 'coarser map'
+			median filter: on coarser map : median filter (3 x 1): 'Value' => 
+			'median'
+		Separate background from foreground
+			Multi-Threshold on blue channel
+				multi-threshold segmentation: multi-threshold: creating 'New 
+				Level': unclassified <= 120 < remainder on Layer 3
+			Merge background objects
+				merge region: remainder at  New Level: merge region
+		Canny Edge Detection for Buildings
+			Remove noise while preserving edges
+				median filter: remainder at  New Level: median filter (3 x 1): 
+				'Value' => 'median'
+			Detect vertical hachure of buildings
+				line extraction: line extraction (A:90°, W:1px, L:10px, B:4px) 
+				'Value' => 'hachure'
+				multi-threshold segmentation: at  New Level: remainder <= 1 < 
+				Texture on hachure
+				merge region: Texture at  New Level: merge region
+			Detect edges of buildings
+				edge extraction canny: remainder at  New Level: edge extraction 
+				canny (Canny's Algorithm) 'median' => 'canny'
+				Apply Gauss filter
+					convolution filter: convolution filter (Gauss Blur, 7 x 7 x 
+					1): 'hachure' => 'gauss7_hachure'
+			Separate edges of buildings from remainder
+				contrast split segmentation: remainder at  New Level: object diff. 
+				split canny [0-255:+5] (0.2,0) (contrast>0.3) -> 
+				[Boundaries,Remainder]
+			Close boundaries of buildings
+				Enlarge boundaries
+					pixel-based object resizing: boundaries with Rel. area of 
+					remainder (1) >= 0.9  at  New Level: grow into unclassified
+				Merge 'Boundaries'
+					merge region: boundaries with Rel. area of remainder (1) >= 
+					0.9  at  New Level: merge region
+				Close gaps by bounding boxes
+					Enlarge bounding boxes
+						vector buffering/shrinking: vector buffering/shrinking 
+						'BBs' -> 'BBs_extended' (delta=2, miter limit=3x)
+		Detect and Classify Buildings
+			Reclassify 'Boundaries' and 'Remainder' lines within 'Texture'
+				find enclosed by class: boundaries, remainder with Width <= 2 Pxl 
+				at  New Level: enclosed by Texture: Texture +
+				assign class: boundaries, remainder with Width <= 2 Pxl at  New 
+				Level: Texture
+				merge region: Texture at  New Level: merge region
+				find enclosed by image object: Texture at  New Level: enclosed by 
+				domain: Texture +
+				merge region: Texture at  New Level: merge region
+			Remove stripes
+				morphology: Texture at  New Level: closing: New
+				assign class: New at  New Level: Texture
+				Remove clutter
+					assign class: Texture with Width <= 3 Pxl at  New Level: 
+					remainder
+				Enlarge 'Texture' objects
+					grow region: Texture at  New Level: <- boundaries, 
+					remainder Area <= 140 Pxl
+		Detect water areas
+			find enclosed by class: boundaries with Area <= 50 Pxl at  New Level: 
+			enclosed by remainder: New +
+			assign class: remainder with Rel. border to New > 0.1  at  New Level: 
+			Water
+			merge region: Water at  New Level: merge region
+		Improve edges of buildings
+			assign class: remainder with Mean median < 0.1  at  New Level: Texture
+		Improve water areas
+			merge region: Texture at  New Level: merge region
+			find enclosed by class: Texture at  New Level: enclosed by Water: Water+
+			merge region: Water at  New Level: merge region
+			find enclosed by class: New at  New Level: enclosed by Water: Water+
+			find enclosed by class: remainder with Area < 50 Pxl at  New Level: 
+			enclosed by Water: Water+
+			find enclosed by class: boundaries at  New Level: enclosed by Water: 
+			Water+
+			merge region: Water at  New Level: merge region
+		Improve buildings
+			Remove small 'Remainder' objects
+				find enclosed by class: remainder with Area < 20 Pxl at  New 
+				Level: enclosed by Texture: Texture +
+			Merge 'Texture'
+				merge region: Texture at  New Level: merge region
+		Separate water areas from remainder
+			1) Large water areas
+				assign class: remainder with Mean Layer 3 >= 129  and Mean Layer 
+				3 <= 153  and GLDV Mean (0°) < 55  and GLDV Mean (0°) > 20  at  
+				New Level: Water
+			2) Remaining water areas
+				multi-threshold segmentation: remainder with Mean Hue >= 0.1  and 
+				Area > 500 Pxl at  New Level: remainder <= 0.2 < Water <= 0.6 < 
+				Water on Hue
+			Remove small red artifacts in water
+				assign class: Texture with Number of neighbors <= 1  and Rel. 
+				border to Water = 1  at  New Level: Water
+				grow region: Water at  New Level: <- Water <not found> = 0
+			Remove small blue artifacts in remainder
+				assign class: Water with Area <= 90 Pxl at  New Level: remainder
+			Remove white holes in water
+				assign class: remainder with Rel. border to Water >= 0.1  at  New 
+				Level: Water
+			Remove 'Remainder', 'Texture' and 'Labels_remaining' artifacts (from 
+			labels) in 'Water'
+				find enclosed by class: boundaries, Labels_remaining, Texture at  
+				New Level: enclosed by Water: Water+
+			Merge water areas
+				merge region: Water at  New Level: merge region
+		Improve 'Texture' within buildings
+			1) Based on GLDV texture (0°)
+				create temporary image layer: remainder at  New Level: create 
+				temp. image layer 'remainder_GLDV_Mean' using 'GLDV Mean (0°)'
+				assign class: remainder with GLDV Mean remainder_GLDV_Mean (0°) 
+				>= 100  at  New Level: Texture
+			2) Based on neighborhood to 'Texture'
+				chessboard segmentation: remainder at  New Level: chess board: 30
+				create temporary image layer: remainder at  New Level: create 
+				temp. image layer 'Remainder_Texture' using 'Rel. border to 
+				Texture'
+				assign class: New with Rel. border to Texture >= 0.6  at  New 
+				Level: Texture
+				merge region: New at  New Level: merge region
+			Convert bounding boxes again to 'Remainder'
+				vector-based segmentation: New, Water at  New Level: vector-
+				based segmentation using BBs
+				assign class by thematic layer: New at  New Level: assign class 
+				by thematic layer using "FID"
+			Reclassify 'Temp' to 'Texture'
+				assign class: New at  New Level: Texture
+			Merge 'Texture'
+				merge region: Texture at  New Level: merge region
+		Improve water areas
+			Remove 'Texture' within 'Water'
+				find enclosed by image object: Water at  New Level: enclosed by 
+				domain: Water+
+				merge region: Water at  New Level: merge region
+		Merge 'Remainder'
+			merge region: remainder at  New Level: merge region
+		Export raster
+			Whole classification as PNG
+				export classification view: at  New Level: export classification 
+				by color to Fritzsch_Buildings001
+			Buildings
+				export classification view: Texture at  New Level: export 
+				classification by color to Fritzsch_Buildings
+			Water
+				export classification view: Water at  New Level: export 
+				classification by color to Fritzsch_Water
+			Boundaries
+				export classification view: boundaries at  New Level: export 
+				classification by color to Fritzsch_Boundaries
+			Remainder
+				export classification view: remainder at  New Level: export 
+				classification by color to Fritzsch_Remainder

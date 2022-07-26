@@ -1,0 +1,229 @@
+Classes:
+	Boundaries
+	Labels_remaining
+	Labels
+	Temp
+	Public Buildings
+	Remainder
+	Texture
+	Water
+
+Process: Main:
+	Define map
+		Reset
+			delete layer: delete thematic layer 'BBs_extended'
+			delete layer: delete thematic layer 'BBs_buffered'
+			delete layer: delete image layer 'Hue'
+			delete layer: delete image layer 'Saturation'
+			delete layer: delete image layer 'Value'
+			delete layer: delete image layer 'canny'
+			delete layer: delete image layer 'median'
+			delete image object level: delete '<all levels>'
+		Generate HSV channels
+			color space transformation: RGB > HSV/HSI: color space: R:'Layer 1',
+			G:'Layer 2', B:'Layer 3' -> H:'Hue', S:'Saturation', V:'Value'
+		Copy Map for further tests
+			copy map: copy map to 'coarser map'
+			median filter: on coarser map : median filter (3 x 1): 'Value' =>
+			'median'
+		Separate background from foreground
+			Multi-Threshold on blue channel
+				multi-threshold segmentation: multi-threshold: creating 'New
+				Level': unclassified <= 120 < Remainder on Layer 3
+			Merge background objects
+				merge region: Remainder at  New Level: merge region
+		Separate labels within bounding boxes from background
+			vector-based segmentation: at  New Level: vector-based segmentation
+			using BBs
+			assign class by thematic layer: at  New Level: assign class by thematic
+			layer using "ImageId"
+			merge region: Labels at  New Level: merge region
+		Convert class 'Labels' to 'Remainder'
+			assign class: Labels at  New Level: Remainder
+			Merge background objects
+				merge region: Labels at  New Level: merge region
+				merge region: Remainder at  New Level: merge region
+		Canny Edge Detection for Buildings
+			Remove noise while preserving edges
+				median filter: Remainder at  New Level: median filter (5 x 1): 
+				'Value' => 'median'
+			Detect edges of buildings
+				edge extraction canny: Remainder at  New Level: edge extraction 
+				canny (Canny's Algorithm) 'median' => 'canny'
+			Separate edges of buildings from Remainder
+				contrast split segmentation: Remainder at  New Level: object diff. 
+				split canny [0-255:+5] (0.2,0) (contrast>0.3) -> 
+				[Boundaries,Remainder]
+				Remove labels
+					Shrink bounding boxes
+						vector buffering/shrinking: vector buffering/shrinking 
+						'BBs' -> 'BBs_buffered' (delta=-1, miter limit=3x)
+					Remove labels
+						vector-based segmentation: Boundaries at  New Level: 
+						vector-based segmentation using BBs_buffered
+						assign class: Boundaries with Max overlap [%]: BBs >= 
+						100  at  New Level: Remainder
+						merge region: Remainder at  New Level: merge region
+			Close boundaries around buildings
+				Remove 'unclassified' label parts
+					assign class: unclassified with Number of pixels < 65  and 
+					Rel. border to Boundaries >= 0.5  at  New Level: 
+					Labels_remaining
+				Remove 'Boundaries' label parts
+					assign class: Boundaries with Rel. border to Labels_
+					remaining >= 0.5  at  New Level: Labels_remaining
+				Merge 'Boundaries' at labels
+					merge region: Boundaries with Border to Labels_remaining >= 
+					1 Pxl at  New Level: merge region
+					assign class: Boundaries with Border to Labels_remaining >= 
+					1 Pxl at  New Level: Labels_remaining
+				Enlarge boundaries
+					pixel-based object resizing: Boundaries with Rel. area of 
+					Remainder (1) >= 0.9  at  New Level: grow into unclassified
+				Merge 'Boundaries'
+					merge region: Boundaries with Rel. area of Remainder (1) >= 
+					0.9  at  New Level: merge region
+				Close gaps by bounding boxes
+					Enlarge bounding boxes
+						vector buffering/shrinking: vector buffering/shrinking 
+						'BBs' -> 'BBs_extended' (delta=2, miter limit=3x)
+		Detect and Classify Buildings
+			Haralick Texture
+				assign class: unclassified with GLCM Contrast (0°) >= 450  at  New 
+				Level: Texture
+			Create 'Public Buildings'
+				assign class: Texture with Mean Value >= 0.31  and Mean Value < 
+				0.41  and Area (excluding inner polygons) > 800 Pxl and Compactness 
+				(polygon) > 0.1  at  New Level: Public Buildings
+				Remove 'Remainder' clutter enclosed by 'Public Buildings'
+					assign class: Remainder with Rel. border to Public Buildings 
+					= 1  and Area <= 10 Pxl at  New Level: Public Buildings
+					merge region: Public Buildings at  New Level: merge region
+				Remove boundary of public buildings
+					assign class: Boundaries with Rel. border to Public Buildings 
+					>= 0.1  at  New Level: Public Buildings
+			Merge 'Boundaries'
+				Close boundaries of buildings
+					Clip buildings by enlarged bounding boxes
+						vector-based segmentation: Labels_remaining, Texture 						with image object distance to BBs (outline) <= 1 Pxl 						at Level: vector-based segmentation using BBs_extended
+					Classify areas within enlarged bounding boxes into 
+					'Boundaries'
+						assign class: Labels_remaining, Texture with image 
+						object distance to BBs (outline) = 0 Pxl at  New Level: 
+						Boundaries
+					Classify 'Labels_remaining' directly connected to enlarged 					bounding boxes into 'Boundaries'
+						assign class: Labels_remaining with image object 
+						distance 	to BBs (outline) <= 2 Pxl at  New Level: 
+						Boundaries
+					Merge 'Boundaries' touching a BB
+						merge region: Boundaries with image object 
+						distance to BBs (outline) <= 2 Pxl at  New Level: 
+						merge region
+				Remove gaps (esp. hatched 'Remainder') within 'Texture'
+					assign class: with Rel. border to Texture >= 0.8  and Main 
+					direction >= 20  and Main direction <= 70  at  New Level: 
+					Texture
+				Reclassify objects completely enclosed by 'Boundaries' into 
+				'Texture'
+					find enclosed by class: Boundaries, Labels_remaining, 
+					Remainder at  New Level: enclosed by Boundaries: Texture +
+				Merge 'Texture' objects
+					merge region: Texture at  New Level: merge region
+					Remove gaps within 'Texture' ('Remainder' areas enclosed by 
+					'Texture')
+						assign class: Remainder with Rel. border to Texture >= 
+						0.95  at  New Level: Texture
+					Remove 'Boundaries' clutter within 'Texture'
+						assign class: Boundaries with Rel. border to Texture = 
+						1  at  New Level: Texture
+					Merge 'Texture' again
+						merge region: Texture at  New Level: merge region
+				Remove 'Labels_remaining'
+					merge region: Labels_remaining at  New Level: merge region
+		Separate 'Water' from 'Remainder'
+			1) Rivers
+				assign class: Remainder with Mean Layer 3 >= 129  and Mean Layer 
+				3 <= 153  and GLDV Mean (0°) < 55  and GLDV Mean (0°) > 20  at  
+				New Level: 'Water'
+			2) Lakes and remaining water areas
+				multi-threshold segmentation: Remainder with Mean Hue >= 0.1  and 
+				Area > 500 Pxl at  New Level: Remainder <= 0.2 < 'Water' <= 0.6
+				< 'Water' on Hue
+			Remove small building artifacts in water
+				assign class: Texture with Number of neighbors <= 1  and Rel. 
+				border to ‘Water’ = 1  at  New Level: 'Water'
+				grow region: ‘Water’ at  New Level: <- 'Water' <not found> = 0
+			Remove small water artifacts in 'Remainder'
+				assign class: 'Water' with Area <= 90 Pxl at  New Level: Remainder
+			Remove small gaps in 'Water'
+				assign class: Remainder with Rel. border to 'Water' >= 0.1  at 
+				New Level: 'Water'
+			Remove 'Remainder', 'Texture' and 'Labels_remaining' artifacts (from 
+			labels) in 'Water'
+				find enclosed by class: Boundaries, Labels_remaining, Texture at  
+				New Level: enclosed by 'Water': 'Water' + merge water
+				merge region: 'Water' at  New Level: merge region
+		Improve 'Texture' within buildings
+			1) Based on GLDV texture (0°)
+				create temporary image layer: Remainder at  New Level: create 
+				temp. image layer 'Remainder_GLDV_Mean' using 'GLDV Mean (0°)'
+				assign class: Remainder with GLDV Mean Remainder_GLDV_Mean (0°) 
+				>= 100  at  New Level: Texture
+			2) Based on neighborhood to 'Texture'
+				chessboard segmentation: Remainder at  New Level: chess board: 30
+				create temporary image layer: Remainder at  New Level: create 
+				temp. image layer 'Remainder_Texture' using 'Rel. border to 
+				Texture'
+				assign class: Remainder with Rel. border to Texture >= 0.6  at  
+				New Level: New
+				merge region: New at  New Level: merge region
+			Convert bounding boxes again to 'Remainder'
+				vector-based segmentation: New, 'Water' at  New Level: vector-
+				based segmentation using BBs
+				assign class by thematic layer: New at  New Level: assign class 
+				by thematic layer using "FID"
+			Reclassify 'Temp' to 'Texture'
+				assign class: Temp at  New Level: Texture
+			Merge 'Texture'
+				merge region: Texture at  New Level: merge region
+		Improve 'Water'
+			Remove 'Boundaries' at edges of water
+				assign class: Boundaries with Border to 'Water' >= 1 Pxl at  New 
+				Level: 'Water'
+			Convert objects completely enclosed by water also to 'Water'
+				find enclosed by class: at  New Level: enclosed by 'Water': 
+				'Water'+
+			Remove 'Texture' within 'Water'
+				find enclosed by image object: 'Water' at  New Level: enclosed by 
+				domain: 'Water'+
+			Merge 'Water' objects
+				merge region: 'Water' at  New Level: merge region
+		Convert bounding boxes again to 'Remainder'
+			vector-based segmentation: 'Water' at  New Level: vector-based 
+			segmentation using BBs
+			assign class by thematic layer: 'Water' at  New Level: assign class by 
+			thematic layer using "FID"
+		Merge 'Remainder'
+			merge region: Remainder at  New Level: merge region
+		Export raster
+			Whole classification as PNG
+				export classification view: at  New Level: export classification 
+				by color to Classification
+			Buildings
+				export classification view: Texture at  New Level: export 
+				classification by color to Classification
+			Public buildings
+				export classification view: Public Buildings at  New Level: export 
+				classification by color to Classification
+			Water
+				export classification view: 'Water' at  New Level: export 
+				classification by color to Classification004
+			Boundaries
+				export classification view: Boundaries at  New Level: export 
+				classification by color to Classification
+			Remainder
+				export classification view: Remainder at  New Level: export 
+				classification by color to Classification
+			Labels_remaining
+				export classification view: Labels_remaining at  New Level: export 
+				classification by color to Classification

@@ -1,0 +1,153 @@
+Classes:
+	Boundaries
+	Labels
+	Temp
+	Remainder
+	Texture
+	Water
+
+Process: Main:
+	Define map
+		Reset
+			delete image object level: delete '<all levels>'
+			delete layer: delete image layer 'Hue'
+			delete layer: delete image layer 'Saturation'
+			delete layer: delete image layer 'Value'
+			delete layer: delete image layer 'median'
+		Generate HSV channels
+			color space transformation: RGB > HSV/HSI: color space: R:'Layer 1', 
+			G:'Layer 2', B:'Layer 3' -> H:'Hue', S:'Saturation', V:'Value'
+		Copy Map for further tests
+			copy map: copy map to 'coarser map'
+			median filter: on coarser map : median filter (3 x 1): 'Value' => 
+			'median'
+		Separate background from foreground
+			Multi-Threshold on blue channel to extract all edges
+				multi-threshold segmentation: multi-threshold: creating 'New 
+				Level': boundaries <= 145 < remainder on Layer 3
+			Extract buildings
+				Define building objects by small dot texture
+					find enclosed by class: boundaries with Area <= 4 Pxl at New 
+					Level: enclosed by remainder: New +
+					Create layer which contains nearby small dot texture pixels 
+					(only those areas are supposed to be buildings)
+						create temporary image layer: New with Distance to New 
+						< 10 Pxl at New Level: create temp. image layer 
+						'temp_distanceNew<10' using 'Distance to New'
+					Classify those areas containing the pre-defined dots into 
+					'buildings'
+						assign class: remainder with Existence of New (0) >= 1  
+						and Area < 7000 Pxl at New Level: Texture
+				Close gaps of boundaries
+					pixel-based object resizing: 2x: boundaries at New Level: 
+					grow into remainder
+				Classify 'Remainder' with clutter as 'Buildings' once again
+					assign class: remainder with Existence of New (0) >= 1  and 
+					Area < 6000 Pxl and Compactness (polygon) >= 0.1  at New 
+					Level: Texture
+				Bring 'Boundaries' back to former image objects (before closing 
+				their gaps)
+					multi-threshold segmentation: boundaries at New Level: New 
+					<= 145 < remainder on Layer 3
+					Reclassify 'Temp' into 'Texture'
+						assign class: New at New Level: boundaries
+		Separate water from remainder
+			Extract typical water texture (with the aid of narrow, longish (not 
+			too long) splinters)
+				find enclosed by class: boundaries with Length <= 20 Pxl and Width 
+				<= 3 Pxl and Length >= 10 Pxl at New Level: enclosed by remainder, 
+				Texture: 'Water'+
+			Classify segments into 'Water' if they are adjacent to this extracted 
+			water texture
+				assign class: with Existence of 'Water' (0) >= 1  at New Level: 
+				'Water'
+			Classify enclosed segments (by Water) also into 'Water'
+				find enclosed by class: at New Level: enclosed by 'Water': 
+				‘Water’+
+				merge region: 'Water' at New Level: merge region
+			Classify 'Remainder' which is adjacent to 'Water' also as 'Water'
+				assign class: remainder with Existence of 'Water' (0) >= 1  at 				New Level: ‘Water’
+				assign class: 5x: remainder with Existence of 'Water' (0) >= 1  
+				and Area < 500 Pxl at New Level: 'Water'
+			Classify enclosed segments (by Water) also into 'Water'
+				find enclosed by class: at New Level: enclosed by 'Water': 
+				'Water'+
+			Merge 'Water' objects
+				merge region: 'Water' at New Level: merge region
+		Separate labels within bounding boxes from background
+			vector-based segmentation: at New Level: vector-based segmentation 
+			using BBs
+			assign class by thematic layer: at New Level: assign class by thematic 
+			layer using "layer"
+			merge region: Labels at New Level: merge region
+		Convert class 'Labels' to 'Remainder' resp. 'Texture'
+			Classify label as 'Texture' or 'Remainder'
+				Texture
+					assign class: Labels with Rel. border to Texture >= 0.5  at 
+					New Level: Texture
+				Remainder
+					assign class: Labels with Rel. border to remainder >= 0.5  
+					at New Level: remainder
+			merge region: remainder at New Level: merge region
+		Improve 'Water'
+			Remove 'Texture' at edges of water
+				assign class: Texture with Border to 'Water' >= 1 Pxl at New 
+				Level: 'Water'
+			Remove 'Remainder' at edges of water
+				assign class: remainder with Border to 'Water' >= 1 Pxl and Area 
+				< 700 Pxl at New Level: 'Water'
+			Remove 'Boundaries' at edges of water
+				assign class: boundaries with Border to 'Water' >= 1 Pxl and Area 
+				< 500 Pxl at New Level: 'Water'
+			Convert objects completely enclosed by water also to 'Water'
+				find enclosed by class: at New Level: enclosed by 'Water': 
+				'Water'+
+			Remove 'Texture' within 'Water'
+				find enclosed by image object: 'Water' at New Level: enclosed by 
+				domain: 'Water'+
+			merge 'Water' objects
+				merge region: 'Water' at New Level: merge region
+		Improve 'Texture' within buildings
+			Remove small enclosed segments
+				find enclosed by class: at New Level: enclosed by Texture: 
+				Texture+
+				merge region: Texture at New Level: merge region
+		Improve 'Boundaries' by reclassifying them into other classes
+			multi-threshold segmentation: boundaries at New Level: New <= 0.5 < 
+			boundaries on Value
+			'Water'
+			assign class: boundaries with Rel. border to New >= 0.2  and Rel. border 
+			to 'Water' >= 0.2  at New Level: 'Water'
+				assign class: boundaries with Rel. border to 'Water' >= 0.1  and 
+				Rel. border to Texture < 0.05  at New Level: 'Water'
+				assign class: 5x: boundaries with Number of 'Water' (0) >= 1  at 
+				New Level: 'Water'
+				find enclosed by class: at New Level: enclosed by 'Water': 
+				'Water'+
+				merge region: 'Water' at New Level: merge region
+			'Texture'
+				assign class: boundaries with Rel. border to Texture > 0.11  and 
+				Rel. border to 'Water' <= 0.3  at New Level: Texture
+				merge region: Texture at New Level: merge region
+			Convert 'Temp' to 'Boundaries'
+				assign class: New at New Level: boundaries
+			merge region: boundaries at New Level: merge region
+		Export raster
+			Whole classification as PNG
+				export classification view: at New Level: export classification 
+				by color to Classification
+			Buildings
+ 				export classification view: Texture at New Level: export 
+				classification by color to Classification
+			Water
+				export classification view: 'Water' at New Level: export 
+				classification by color to Classification004
+			Boundaries
+				export classification view: boundaries at New Level: export 
+				classification by color to Classification
+			Remainder
+				export classification view: remainder at New Level: export 
+				classification by color to Classification
+			Labels
+				export classification view: Labels at New Level: export 
+				classification by color to Classification001
