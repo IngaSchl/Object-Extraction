@@ -1,5 +1,7 @@
 #  Semi-automated object extraction from large-scale historical maps
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6906425.svg)](https://doi.org/10.5281/zenodo.6906425)
+
 **Author**: Inga Schlegel
 
 **Date**: 07/26/2022
