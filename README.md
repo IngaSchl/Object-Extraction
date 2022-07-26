@@ -65,4 +65,4 @@ The following example gives detail of the Jupyter Notebook's proceeding with the
 
 ## 02 Object extraction
 
-Detailed object extraction process trees – described in general terms in paper sections 4.2 and 6 (for the maps shown in figures 1 as well as 8 a) and b), respectively). These process trees can be implemented directly in eCognition.
+Detailed object extraction process trees – described in general terms in paper sections 4.2 and 6 (for the maps shown in figures 1 as well as 8 a) and b), respectively) - are provided in the form of .txt files. These process trees can be implemented directly in eCognition.
