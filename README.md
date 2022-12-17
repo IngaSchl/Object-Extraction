@@ -4,9 +4,9 @@
 
 **Author**: Inga Schlegel
 
-**Date**: 07/26/2022
+**Date**: 12/17/2022
 
-Exemplary research data and software used and implemented for the CaGIS paper *Semi-automated object extraction from large-scale historical maps* [TO DO add paper link].
+Exemplary research data and software used and implemented for the KN paper *Semi-automated object extraction from large-scale historical maps* [TO DO add paper link].
 
 This repository contains executable Python code (Jupyter Notebooks) described within sections 4 and 5 in the paper. Each subfolder *data* contains exemplary input data.
 
