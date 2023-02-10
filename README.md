@@ -1,12 +1,10 @@
 #  Semi-automated object extraction from large-scale historical maps
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6906425.svg)](https://doi.org/10.5281/zenodo.6906425)
-
 **Author**: Inga Schlegel
 
 **Date**: 12/17/2022
 
-Exemplary research data and software used and implemented for the KN paper *A Holistic Workflow for Semi-automated Object Extraction from Large-Scale Historical Maps* [TO DO add paper link].
+Exemplary research data and software used and implemented for the KN paper [*A Holistic Workflow for Semi-automated Object Extraction from Large-Scale Historical Maps*](https://link.springer.com/article/10.1007/s42489-023-00131-z).
 
 This repository contains executable Python code (Jupyter Notebooks) described within sections 4 and 5 in the paper. Each subfolder *data* contains exemplary input data.
 
